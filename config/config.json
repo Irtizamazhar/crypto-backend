@@ -1,0 +1,9 @@
+{
+  "development": {
+    "username": "root",
+    "password": "asad",
+    "database": "gbl_server",
+    "host": "localhost",
+    "dialect": "mysql"
+  }
+}
