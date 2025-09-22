@@ -1,73 +1,44 @@
-// server.js (or app.js)
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const sequelize = require('./util/config/db');
-const ErrorMiddleware = require('./middlewares/ErrorMiddleware');
+// server/index.js (or app.js)
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const passport = require("./middlewares/passport");
+
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
 const app = express();
-const PORT = process.env.PORT || 4000;
-
-// Routes
-const customerRoute = require('./routes/customerRoute');
-const staffRoute = require('./routes/staffRoute');
-const appointmentRoute = require('./routes/appointmentRoutes');
-const serviceRoute = require('./routes/serviceRoutes');
-const productRoute = require('./routes/product');
-const consumableRoute = require('./routes/consumables');
-const salesRoute = require('./routes/sales');
-const parkedSalesRoute = require('./routes/parkedSales');
-const attendanceRoute = require('./routes/attendance');
-const performanceRoutes = require("./routes/performanceRoutes");
-const payrollRoute = require("./routes/payrollRoute"); // Added payroll route
-const statsRouter = require('./routes/stats');
-
-
-// Middleware setup
 app.use(
   cors({
-    origin: '*',
-    methods: ['GET','POST','PUT','DELETE','PATCH'],
-    allowedHeaders: ['Content-Type','Authorization'],
+    origin: CLIENT_URL,
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"], // ✅ allow auth header
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
+// Handle preflight for all routes
+app.options("*", cors({
+  origin: CLIENT_URL,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+}));
+
 app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(passport.initialize());
 
-// Health check
-app.get('/health', (req, res) => res.sendStatus(200));
+app.use("/public/images", express.static("public/images"));
 
-// Serve static images
-app.use('/images', express.static('public/images'));
+app.get("/", (_req, res) => res.json({ ok: true, name: "CRYPTO-BACKEND" }));
 
-// API Routes
-app.use('/api/customers', customerRoute);
-app.use('/api/staffs', staffRoute);
-app.use('/api/appointments', appointmentRoute);
-app.use('/api/services', serviceRoute);
-app.use('/api/products', productRoute);
-app.use('/api/consumables', consumableRoute);
-app.use('/api/sales', salesRoute);
-app.use('/api/parked-sales', parkedSalesRoute);
-app.use('/api/attendance', attendanceRoute);
-app.use("/api/staffs", performanceRoutes);
-app.use("/api/payroll", payrollRoute); // Added payroll route
-app.use('/api/stats', statsRouter);
+app.use("/auth", require("./routes/auth"));
+app.use("/proxy", require("./routes/proxy"));
+app.use("/paper", require("./routes/paper"));
+app.use("/admin", require("./routes/admin"));
 
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ message: err.message || "Server error" });
+});
 
-// Global error handler
-app.use(ErrorMiddleware);
-
-// DB connection and server startup
-sequelize
-  .authenticate()
-  .then(() => {
-    return sequelize.sync({ alter: true }); // Use alter: true for development only
-  })
-  .then(() => {
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    process.exit(1);
-  });
+const port = process.env.PORT || 4000;
+app.listen(port, () => console.log("API on http://localhost:" + port));

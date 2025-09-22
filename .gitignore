@@ -1,6 +1,15 @@
-.env
+# dependencies
+node_modules/
 
-node_modules
-public
-build
-paclkage-lock.json
+# build output
+dist/
+build/
+
+# env files
+.env
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
