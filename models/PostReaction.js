@@ -1,0 +1,23 @@
+"use strict";
+module.exports = (sequelize, DataTypes) => {
+  const PostReaction = sequelize.define("PostReaction", {
+    id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+    post_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
+    user_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
+    kind: { type: DataTypes.ENUM("like","rocket","fire","think"), allowNull: false },
+  }, {
+    tableName: "post_reactions",
+    underscored: true,
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: false,
+    indexes: [{ unique: true, fields: ["post_id","user_id","kind"] }],
+  });
+
+  PostReaction.associate = (models) => {
+    PostReaction.belongsTo(models.Post, { foreignKey: "post_id" });
+    PostReaction.belongsTo(models.User, { foreignKey: "user_id" });
+  };
+
+  return PostReaction;
+};
