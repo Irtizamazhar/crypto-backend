@@ -36,16 +36,43 @@ const sequelizeOptions = {
 };
 
 let sequelize;
+
+// 1) If config.json says "use_env_variable", honor it
 if (rawCfg.use_env_variable) {
   sequelize = new Sequelize(process.env[rawCfg.use_env_variable], sequelizeOptions);
-} else if (rawCfg.url) {
-  sequelize = new Sequelize(rawCfg.url, sequelizeOptions);
+
+// 2) If a URL exists in config.json OR in env (DB_URL), use it
+} else if (rawCfg.url || process.env.DB_URL) {
+  const connUrl = rawCfg.url || process.env.DB_URL;
+  sequelize = new Sequelize(connUrl, sequelizeOptions);
+
+// 3) Otherwise, safely fall back to discrete env vars (DB_*). This prevents undefined init.
 } else {
+  const database = rawCfg.database || process.env.DB_NAME;
+  const username = rawCfg.username || process.env.DB_USER;
+  const password = rawCfg.password || process.env.DB_PASS;
+
+  const host     = rawCfg.host     || process.env.DB_HOST || 'localhost';
+  const port     = rawCfg.port     || Number(process.env.DB_PORT || 3306);
+  const dialect  = rawCfg.dialect  || process.env.DB_DIALECT || 'mysql';
+
+  // Guard: minimal checks so we don't init with missing critical fields
+  if (!database || !username || (password === undefined && process.env.DB_PASS === undefined)) {
+    throw new Error(
+      'Sequelize config missing. Provide config/config.json or set DB_DIALECT, DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS (or DB_URL).'
+    );
+  }
+
   sequelize = new Sequelize(
-    rawCfg.database,
-    rawCfg.username,
-    rawCfg.password,
-    sequelizeOptions
+    database,
+    username,
+    password,
+    {
+      ...sequelizeOptions,
+      host,
+      port,
+      dialect,
+    }
   );
 }
 

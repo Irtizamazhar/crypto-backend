@@ -24,7 +24,6 @@ module.exports = (sequelize, DataTypes) => {
       provider: { type: DataTypes.ENUM("local", "google", "facebook", "apple"), allowNull: false, defaultValue: "local" },
       providerId: { type: DataTypes.STRING(191), allowNull: true },
 
-      // URL to avatar (S3/local static). 500 is plenty; TEXT also fine.
       avatar: { type: DataTypes.STRING(500), allowNull: true },
 
       isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
@@ -39,6 +38,10 @@ module.exports = (sequelize, DataTypes) => {
       paperHistory: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
       tapCount: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, defaultValue: 0 },
       userLevel: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
+
+      // NEW: alerts quota tracking (lifetime)
+      freeAlertsLimit: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 2 },
+      freeAlertsUsed:  { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
 
       plan: { type: DataTypes.ENUM("free", "pro"), allowNull: false, defaultValue: "free" },
     },

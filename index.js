@@ -42,6 +42,7 @@ app.use("/api/feed", require("./routes/feed.routes"));
 
 /* ---------- NEW: Alerts routes ---------- */
 app.use("/api/alerts", require("./routes/alerts")); // ✅ mount alerts API
+app.use("/api/payments", require("./routes/payments"));
 
 /* ---------- Error handler ---------- */
 app.use((err, _req, res, _next) => {
