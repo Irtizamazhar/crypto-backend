@@ -1,4 +1,3 @@
-// server/controllers/PaperWalletController.js
 "use strict";
 
 const { User, Rain, RainGrab, sequelize } = require("../models");
@@ -251,4 +250,27 @@ exports.history = async (req, res) => {
   const items = list.slice(start, start + limit);
 
   return res.json({ items, page, limit, total: list.length });
+};
+
+/** 🔵 One-time Welcome Lucky Wheel spin */
+exports.spin = async (req, res) => {
+  const user = await User.findByPk(req.user.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  if (user.hasSpun) return res.status(400).json({ message: "Spin already used" });
+
+  // Weighted rewards: 50% +5, 30% +10, 15% +20, 5% +50
+  const r = Math.random();
+  let reward = 5;
+  if (r < 0.05) reward = 50;
+  else if (r < 0.20) reward = 20;
+  else if (r < 0.50) reward = 10;
+
+  user.hasSpun = true;
+  user.paper = Number(user.paper || 0) + Number(reward);
+  const hist = Array.isArray(user.paperHistory) ? user.paperHistory : [];
+  hist.unshift({ type: "spin", amount: Number(reward), note: "Welcome wheel", createdAt: new Date() });
+  user.paperHistory = hist.slice(0, 500);
+  await user.save();
+
+  return res.json({ ok: true, reward: Number(reward), paper: Number(user.paper) });
 };

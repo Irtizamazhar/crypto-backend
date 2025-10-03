@@ -39,11 +39,18 @@ module.exports = (sequelize, DataTypes) => {
       tapCount: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, defaultValue: 0 },
       userLevel: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
 
-      // NEW: alerts quota tracking (lifetime)
+      // alerts quota
       freeAlertsLimit: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 2 },
       freeAlertsUsed:  { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
 
       plan: { type: DataTypes.ENUM("free", "pro"), allowNull: false, defaultValue: "free" },
+
+      // 🔵 NEW: referral & spin fields
+      referralCode: { type: DataTypes.STRING(32), allowNull: true, unique: true },
+      referredBy:   { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
+      referralCount:{ type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
+
+      hasSpun:      { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }, // lucky wheel once
     },
     {
       sequelize,

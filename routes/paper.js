@@ -1,4 +1,3 @@
-// server/routes/paper.js
 const router = require("express").Router();
 const { requireAuth, requireRole } = require("../middlewares/JWTAuth");
 const Paper = require("../controllers/PaperWalletController");
@@ -12,6 +11,7 @@ router.post("/tap-batch", requireAuth, Paper.tapBatch);
 router.get("/rain", requireAuth, Paper.getRain);
 router.post("/rain/grab", requireAuth, Paper.grabRain);
 router.get("/history", requireAuth, Paper.history);
+router.post("/spin", requireAuth, Paper.spin);
 
 // Admin-only prize rain controls
 router.post("/admin/rain/start", requireAuth, requireRole("admin"), Paper.adminStartRain);

@@ -10,12 +10,10 @@ function baseUrl(req) {
   const host = req.headers["x-forwarded-host"] || req.get("host");
   return `${proto}://${host}`;
 }
-
 function sign(user) {
   const payload = { id: user.id, email: user.email, role: user.role, name: user.name };
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES || "7d" });
 }
-
 function pubUser(u) {
   return {
     id: u.id,
@@ -29,39 +27,85 @@ function pubUser(u) {
     paperLastClaimAt: u.paperLastClaimAt || null,
     tapCount: Number(u.tapCount || 0),
     userLevel: Number(u.userLevel || 0),
+    referralCode: u.referralCode || null,
+    referredBy: u.referredBy || null,
+    referralCount: Number(u.referralCount || 0),
+    hasSpun: !!u.hasSpun,
   };
 }
-
 function isHttpUrl(s) {
   return typeof s === "string" && /^https?:\/\/.+/i.test(s);
+}
+function genReferralCode(base) {
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${(base || "USER").toString().replace(/[^A-Z0-9]/gi, "").slice(0,6).toUpperCase()}${rand}`;
+}
+async function awardPaper(user, amount, type, note, t) {
+  user.paper = Number(user.paper || 0) + Number(amount);
+  const hist = Array.isArray(user.paperHistory) ? user.paperHistory : [];
+  hist.unshift({ type, amount: Number(amount), note, createdAt: new Date() });
+  user.paperHistory = hist.slice(0, 500);
+  await user.save({ transaction: t });
 }
 
 module.exports = {
   async register(req, res) {
     let tx;
     try {
-      let { name, email, password } = req.body || {};
+      let { name, email, password, referralCode: refInput } = req.body || {};
       name = (name || "").trim();
       email = String(email || "").trim().toLowerCase();
       password = String(password || "");
       if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
 
       tx = await sequelize.transaction();
+
       const exists = await User.findOne({ where: { email }, transaction: tx });
       if (exists) { await tx.rollback(); return res.status(409).json({ message: "Email already in use" }); }
 
+      // find referrer (optional)
+      let referrer = null;
+      if (refInput) {
+        referrer = await User.findOne({ where: { referralCode: String(refInput).trim() }, transaction: tx });
+      }
+
+      // create user
       const user = await User.create({
         name, email, password: await guard.hashPass(password),
         role: "user", provider: "local",
         fiatUsd: 0, paper: 0, paperStreak: 0, paperLastClaimAt: null, tapCount: 0, userLevel: 0, paperHistory: [],
+        referredBy: referrer ? referrer.id : null,
       }, { transaction: tx });
 
-      let addr;
-      try { addr = await createTronAddressForUser(user.id); }
+      // ensure unique referral code
+      let code = genReferralCode(name || email);
+      // small loop to guarantee uniqueness
+      for (let i = 0; i < 3; i++) {
+        const clash = await User.findOne({ where: { referralCode: code }, transaction: tx });
+        if (!clash) break;
+        code = genReferralCode(name || email);
+      }
+      user.referralCode = code;
+
+      // Signup bonus for new user (+20)
+      await awardPaper(user, 20, "ref_signup_bonus", "Welcome bonus for signing up", tx);
+
+      // Referrer bonus (+100) & count++
+      if (referrer) {
+        referrer.referralCount = Number(referrer.referralCount || 0) + 1;
+        await awardPaper(referrer, 100, "referral_reward", `Referral signup: ${email}`, tx);
+      }
+
+      // create TRON address
+      try { await createTronAddressForUser(user.id); }
       catch { await tx.rollback(); return res.status(500).json({ message: "Failed to create wallet. Please try again." }); }
 
+      await user.save({ transaction: tx });
+      if (referrer) await referrer.save({ transaction: tx });
+
       await tx.commit();
-      return res.json({ token: sign(user), user: pubUser(user), address: addr.address, message: "Registration successful" });
+
+      return res.json({ token: sign(user), user: pubUser(user), message: "Registration successful" });
     } catch (e) {
       if (tx) await tx.rollback();
       return res.status(500).json({ message: "Registration failed. Please try again." });
@@ -78,9 +122,7 @@ module.exports = {
       if (!(await guard.verifyPass(password, user.password))) {
         return res.status(400).json({ message: "Invalid email or password" });
       }
-      const ua = await UserAddress.findOne({ where: { user_id: user.id, network: "TRC20" } });
       const resp = { token: sign(user), user: pubUser(user) };
-      if (ua) resp.address = ua.address;
       return res.json(resp);
     } catch (e) {
       return res.status(500).json({ message: e.message || "Login failed" });
@@ -89,52 +131,40 @@ module.exports = {
 
   async me(req, res) {
     try {
-      const ua = await UserAddress.findOne({ where: { user_id: req.user.id, network: "TRC20" } });
-      const resp = { user: pubUser(req.user) };
-      if (ua) resp.address = ua.address;
-      return res.json(resp);
+      return res.json({ user: pubUser(req.user) });
     } catch {
       return res.json({ user: pubUser(req.user) });
     }
   },
 
-  // NEW: handle file upload (multer put the file on disk)
   async uploadAvatar(req, res) {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const url = `${baseUrl(req)}/uploads/avatars/${encodeURIComponent(req.file.filename)}`;
       return res.json({ url });
     } catch (e) {
-      console.error("uploadAvatar error:", e);
       return res.status(500).json({ message: "Upload failed" });
     }
   },
 
-  // name + avatar URL only
   async updateProfile(req, res) {
     try {
       const { name, avatar } = req.body || {};
       if (!name || !String(name).trim()) return res.status(400).json({ message: "Name is required" });
-
       const user = await User.findByPk(req.user.id);
       if (!user) return res.status(404).json({ message: "Not found" });
 
       user.name = String(name).trim();
 
       if (avatar !== undefined) {
-        if (avatar === "") {
-          user.avatar = null; // clear
-        } else if (isHttpUrl(avatar)) {
-          user.avatar = String(avatar);
-        } else {
-          return res.status(400).json({ message: "Avatar must be an http(s) URL. Upload the file first." });
-        }
+        if (avatar === "") user.avatar = null;
+        else if (isHttpUrl(avatar)) user.avatar = String(avatar);
+        else return res.status(400).json({ message: "Avatar must be an http(s) URL. Upload the file first." });
       }
 
       await user.save();
       return res.json({ user: pubUser(user) });
     } catch (e) {
-      console.error("updateProfile error:", e);
       return res.status(500).json({ message: e.message || "Update failed" });
     }
   },
@@ -185,9 +215,7 @@ module.exports = {
       const user = await User.findOne({ where: { email } });
       if (!user) return res.status(400).json({ message: "Invalid token" });
 
-      const ua = await UserAddress.findOne({ where: { user_id: user.id, network: "TRC20" } });
       const resp = { token: sign(user), user: pubUser(user) };
-      if (ua) resp.address = ua.address;
       return res.json(resp);
     } catch (e) {
       return res.status(400).json({ message: "Token expired or invalid" });
@@ -205,7 +233,6 @@ module.exports = {
         role: "admin", provider: "local",
         fiatUsd: 0, paper: 0, paperStreak: 0, paperLastClaimAt: null, tapCount: 0, userLevel: 0, paperHistory: [],
       });
-      try { await createTronAddressForUser(admin.id); } catch {}
       return res.json({ message: "Admin created", email: admin.email });
     } catch (e) {
       return res.status(500).json({ message: e.message || "Failed to bootstrap admin" });

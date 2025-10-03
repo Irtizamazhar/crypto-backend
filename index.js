@@ -33,6 +33,7 @@ app.get("/", (_req, res) => res.json({ ok: true, name: "CRYPTO-BACKEND" }));
 app.use("/auth", require("./routes/auth"));
 app.use("/proxy", require("./routes/proxy"));
 app.use("/paper", require("./routes/paper"));
+app.use("/referral", require("./routes/referral"));
 app.use("/admin", require("./routes/admin"));
 app.use("/api/lottery", require("./routes/lottery"));
 app.use("/wallet", require("./routes/wallet"));
