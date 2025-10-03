@@ -1,18 +1,26 @@
 "use strict";
 module.exports = (sequelize, DataTypes) => {
-  const PostComment = sequelize.define("PostComment", {
-    id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
-    post_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
-    user_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
-    text: { type: DataTypes.TEXT, allowNull: false },
-  }, {
-    tableName: "post_comments",
-    underscored: true,
-    timestamps: true,
-    createdAt: "created_at",
-    updatedAt: false,
-    indexes: [{ fields: ["post_id","created_at"] }],
-  });
+  const PostComment = sequelize.define(
+    "PostComment",
+    {
+      id: { type: DataTypes.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true },
+      post_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
+      user_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
+      text: { type: DataTypes.TEXT, allowNull: false },
+      parent_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true },
+    },
+    {
+      tableName: "post_comments",
+      underscored: true,
+      timestamps: true,
+      createdAt: "created_at",
+      updatedAt: false,
+      indexes: [
+        { fields: ["post_id", "created_at"] },
+        { fields: ["parent_id"] },
+      ],
+    }
+  );
 
   PostComment.associate = (models) => {
     PostComment.belongsTo(models.Post, { foreignKey: "post_id" });
